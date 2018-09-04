@@ -22,19 +22,23 @@ namespace nss
             SqliteConnection db = DatabaseInterface.Connection;
             DatabaseInterface.CheckCohortTable();
             DatabaseInterface.CheckInstructorsTable();
+            DatabaseInterface.ExerciseTable();
+            DatabaseInterface.StudentTable();
+            DatabaseInterface.StudentExerciseTable();
+            
 
-            List<Instructor> instructors = db.Query<Instructor>(@"SELECT * FROM Instructor").ToList();
-            instructors.ForEach(i => Console.WriteLine($"{i.FirstName} {i.LastName}"));
+            // List<Instructor> instructors = db.Query<Instructor>(@"SELECT * FROM Instructor").ToList();
+            // instructors.ForEach(i => Console.WriteLine($"{i.FirstName} {i.LastName}"));
 
-            List<Exercise> exercises = db.Query<Exercise>(@"SELECT * FROM Exercise").ToList();
-            exercises.ForEach(e => Console.WriteLine($"{e.Name}"));
+            // List<Exercise> exercises = db.Query<Exercise>(@"SELECT * FROM Exercise").ToList();
+            // exercises.ForEach(e => Console.WriteLine($"{e.Name}"));
 
-            List<Student> students = db.Query<Student>(@"SELECT * FROM Student").ToList();
-            students.ForEach(s => Console.WriteLine($"{s.FirstName} {s.LastName}"));
+            // List<Student> students = db.Query<Student>(@"SELECT * FROM Student").ToList();
+            // students.ForEach(s => Console.WriteLine($"{s.FirstName} {s.LastName}"));
 
-            db.Query<Cohort>(@"SELECT * FROM Cohort")
-              .ToList()
-              .ForEach(i => Console.WriteLine($"{i.Name}"));
+            // db.Query<Cohort>(@"SELECT * FROM Cohort")
+            //   .ToList()
+            //   .ForEach(i => Console.WriteLine($"{i.Name}"));
 
 
 
@@ -61,8 +65,8 @@ namespace nss
                 instructor.Cohort = cohort;
                 return instructor;
             })
-            .ToList()
-            .ForEach(i => Console.WriteLine($"{i.FirstName} {i.LastName} ({i.SlackHandle}) is coaching {i.Cohort.Name}"));
+            .ToList();
+            // .ForEach(i => Console.WriteLine($"{i.FirstName} {i.LastName} ({i.SlackHandle}) is coaching {i.Cohort.Name}"));
 
 
 
@@ -120,7 +124,7 @@ namespace nss
              */
             foreach (KeyValuePair<int, Cohort> cohort in report)
             {
-                Console.WriteLine($"{cohort.Value.Name} has {cohort.Value.Instructors.Count} instructors.");
+                // Console.WriteLine($"{cohort.Value.Name} has {cohort.Value.Instructors.Count} instructors.");
             }
 
 
@@ -160,7 +164,7 @@ namespace nss
                 List<string> assignedExercises = new List<string>();
                 student.Value.AssignedExercises.ForEach(e => assignedExercises.Add(e.Name));
 
-                Console.WriteLine($@"{student.Value.FirstName} {student.Value.LastName} is working on {String.Join(',', assignedExercises)}.");
+                // Console.WriteLine($@"{student.Value.FirstName} {student.Value.LastName} is working on {String.Join(',', assignedExercises)}.");
             }
 
 
@@ -173,7 +177,7 @@ namespace nss
                 Cohort table. Therefore, the Query method must be typed as
                 <Student, Exercise, Cohort, Student>.
              */
-            Dictionary<int, Student> verboseStudents = new Dictionary<int, Student>();
+            Dictionary<int, Student> everyCohorts = new Dictionary<int, Student>();
 
             db.Query<Student, Exercise, Cohort, Student>(@"
                 SELECT
@@ -192,19 +196,19 @@ namespace nss
                 JOIN Cohort c ON s.CohortId = c.Id
             ", (student, exercise, cohort) =>
             {
-                if (!verboseStudents.ContainsKey(student.Id))
+                if (!everyCohorts.ContainsKey(student.Id))
                 {
-                    verboseStudents[student.Id] = student;
+                    everyCohorts[student.Id] = student;
                 }
-                verboseStudents[student.Id].AssignedExercises.Add(exercise);
-                verboseStudents[student.Id].Cohort = cohort;
+                everyCohorts[student.Id].AssignedExercises.Add(exercise);
+                everyCohorts[student.Id].Cohort = cohort;
                 return student;
             });
 
             /*
                 Display the student information using the StringBuilder class
              */
-            foreach (KeyValuePair<int, Student> student in verboseStudents)
+            foreach (KeyValuePair<int, Student> student in everyCohorts)
             {
                 List<string> assignedExercises = new List<string>();
                 student.Value.AssignedExercises.ForEach(e => assignedExercises.Add(e.Name));
@@ -213,6 +217,44 @@ namespace nss
                 output.Append($"{student.Value.FirstName} {student.Value.LastName} ");
                 output.Append($"in {student.Value.Cohort.Name} ");
                 output.Append($"is working on {String.Join(',', assignedExercises)}.");
+                // Console.WriteLine(output);
+            }
+//******************* */
+//List the instructors and students assigned to each cohort
+
+            Dictionary<int, Cohort> allCohorts = new Dictionary<int, Cohort>();
+
+            db.Query<Cohort, Instructor, Student, Cohort>(@"
+                SELECT
+                       c.Id,
+                       c.Name,
+                       i.Id,
+                       i.FirstName,
+                       i.LastName,
+                       s.Id,
+                       s.FirstName,
+                       s.LastName
+                FROM Cohort c
+                LEFT JOIN Instructor i ON i.CohortId = c.Id
+                LEFT JOIN Student s ON s.CohortId = c.Id
+            ", (cohort, instructor, student) =>
+            {
+                if (!allCohorts.ContainsKey(cohort.Id))
+                {
+                    allCohorts[cohort.Id] = cohort;
+                }
+                allCohorts[cohort.Id].Students.Add(student);
+                allCohorts[cohort.Id].Instructors.Add(instructor);
+                return cohort;
+            });
+
+            /*
+                Display the student information using the StringBuilder class
+             */
+            foreach (KeyValuePair<int, Cohort> cohort in allCohorts)
+            {
+                StringBuilder output = new StringBuilder(100);
+                output.Append($"{cohort.Value.Name} ");
                 Console.WriteLine(output);
             }
 
@@ -223,6 +265,7 @@ namespace nss
                 1. Create Exercises table and seed it
                 2. Create Student table and seed it  (use sub-selects)
                 3. Create StudentExercise table and seed it (use sub-selects)
+
                 4. List the instructors and students assigned to each cohort
                 5. List the students working on each exercise, include the
                    student's cohort and the instructor who assigned the exercise
